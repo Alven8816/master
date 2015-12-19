@@ -1,0 +1,153 @@
+---
+title: "Reproducible Research - personal activity monitoring"
+output: html_document
+---
+#Introduction
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+#Data
+The data for this assignment can be downloaded from the course web site: https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip
+
+The variables included in this dataset are:
+
+*steps: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+
+*date: The date on which the measurement was taken in YYYY-MM-DD format
+
+*interval: Identifier for the 5-minute interval in which measurement was taken
+
+*The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+#Data analysis
+##Loading and preprocessing the data
+The data loading is with: read.csv() function. Then changing to the data frame tbl form for further analysis:
+```{r}
+library(dplyr)
+setwd("C:\\Users\\HP\\Documents\\coursera\\coursera project 5 Reproducible Research")
+data <-read.csv("activity.csv",stringsAsFactors = FALSE)
+tbls_data <- tbl_df(data)
+tbls_data
+```
+
+#What is mean total number of steps taken per day?
+*removing the NA steps rows from the data frame
+```{r,echo=TRUE}
+tbl_data <- filter(tbls_data,!is.na(steps))
+```
+
+*Grouping the data set by date
+```{r,echo=TRUE}
+by_data <- group_by(tbl_data,date)
+```
+
+*getting and plotting the total steps taken per day
+```{r,echo=TRUE}
+total_d <- summarise(by_data,total = sum(steps))
+with (total_d,hist(total,10,col = as.factor(date),
+                  main = "Total number of steps taken per day",
+                  xlab =" Total steps in one day"))
+```
+
+*Calculating the mean and median total number of steps taken per day
+
+```{r,echo=TRUE}
+means <- mean(total_d$total)
+medians <- median(total_d$total)
+```
+
+So the mean total steps taken per is: `r means`
+
+The median is: `r medians`
+
+#What is the average daily activity pattern?
+*group data by interval
+```{r}
+by_int <-group_by(tbl_data,interval)
+```
+
+*Average data by interval across all dates
+
+```{r}
+mean_int <- summarize(by_int,steps = mean(steps))
+```
+
+*PLotting the time series sequence of average interval steps
+```{r}
+library(ggplot2)
+ggplot(data = mean_int,aes(x = interval, y = steps))+
+        geom_line()+
+        xlab("Interval")+
+        ylab("Mean number of steps")
+```
+
+*Finding the maximum average steps interval
+```{r}
+max_steps <- max(mean_int$steps)
+max_int <-mean_int$interval[mean_int$steps %in% max(mean_int$steps)]
+```
+the `r max_int`interval contains the maximum number of steps,which taken the `r max_steps` stpes in that 5 minute interval.
+
+#Imputing missing values
+*Calculate and report the total number of missing values in the dataset
+```{r}
+total_na <-sum(is.na(tbls_data$steps))
+```
+the total number of missing values is `r total_na`
+
+*filling in all of the missing values in the dataset using the mean for that 5-minute interval
+
+```{r}
+join_tbl<-left_join(tbls_data,mean_int,by="interval")
+join_new <- ifelse(is.na(join_tbl$steps.x)==TRUE,join_tbl$steps.y,join_tbl$steps.x)
+```
+
+*Create a new dataset that is equal to the original dataset but with the missing data filled in
+```{r}
+join_tbl_new <- join_tbl[,2:3]
+join_tbl_new$steps<-join_new
+```
+
+*Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day
+```{r,echo=TRUE}
+by_new <- join_tbl_new %>%
+        group_by(date)%>%
+        summarise(total_new = sum(steps))
+with (by_new,hist(total_new,10,col = as.factor(date),
+                  main = "New total number of steps taken per day",
+                  xlab =" New total steps in one day"))
+```
+
+*Calculating the mean and median total number of steps taken per day
+
+```{r,echo=TRUE}
+means <- mean(by_new$total_new)
+medians <- median(by_new$total_new)
+```
+
+So the new mean total steps taken per is: `r means`
+
+The new median is: `r medians`
+
+#Are there differences in activity patterns between weekdays and weekends?
+
+*Create a new factor variable in the dataset with two levels ¨C ¡°weekday¡± and ¡°weekend¡±.
+```{r}
+library(lubridate)
+fill_new <-mutate(join_tbl_new,weekend = factor(weekdays(ymd(date)) %in% c('ÐÇÆÚÁù','ÐÇÆÚÈÕ')))
+by_fill_new<-group_by(fill_new,weekend,interval) %>%
+        summarize(steps=mean(steps))
+```
+
+*Make a panel plot containing a time series plot.
+```{r}
+p_wday<-ggplot(data=subset(by_fill_new,weekend==FALSE),aes(x=interval,y=steps))+
+        geom_line()+ 
+        ggtitle("Weekday")+
+        theme(axis.title = element_blank()) 
+p_wend<-ggplot(data=subset(by_fill_new,weekend==TRUE),aes(x=interval,y=steps))+
+        geom_line()+ 
+        ggtitle("Weekend")+
+        theme(axis.title = element_blank()) 
+#Plotting two plot in one graph
+library(gridExtra)
+grid.arrange(p_wend,p_wday, ncol=1)
